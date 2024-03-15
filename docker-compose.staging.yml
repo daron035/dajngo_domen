@@ -2,6 +2,7 @@ version: "3.8"
 
 services:
   dj_web:
+    container_name: dj_web
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
@@ -15,7 +16,7 @@ services:
     depends_on:
       - pg_db
   pg_db:
-    container_name: postgres_container
+    container_name: postgres
     image: postgres:12.0-alpine
     ports:
       - 5432:5432
@@ -26,7 +27,7 @@ services:
     env_file:
       - ./docker/backend/.env.staging.db
   pgadmin:
-    container_name: pgadmin4_container
+    container_name: pgadmin4
     image: dpage/pgadmin4
     restart: always
     environment:
@@ -53,6 +54,7 @@ services:
     depends_on:
       - dj_web
   acme-companion:
+    container_name: acme-companion
     image: nginxproxy/acme-companion
     env_file:
       - docker/backend/.env.staging.proxy-companion
