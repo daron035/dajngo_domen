@@ -1,0 +1,122 @@
+# # pull official base image
+# FROM python:3.12.0-alpine
+#
+# # set work directory
+# WORKDIR /usr/src/app
+#
+# # set environment variables
+# ENV PYTHONDONTWRITEBYTECODE 1
+# ENV PYTHONUNBUFFERED 1
+#
+# # install psycopg2 dependencies
+# RUN apk update \
+#     && apk add postgresql-dev gcc python3-dev musl-dev
+#
+# # install dependencies
+# RUN pip install --upgrade pip
+# COPY backend/requirements.txt .
+# RUN pip install -r requirements.txt
+#
+# # copy entrypoint.sh
+# COPY docker/backend/entrypoint.sh .
+# RUN sed -i 's/\r$//g' /usr/src/app/entrypoint.sh
+# RUN chmod +x /usr/src/app/entrypoint.sh
+#
+# # copy project
+# COPY backend/dj_domen .
+#
+# # run entrypoint.sh
+# ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+
+
+###########
+# BUILDER #
+###########
+
+# pull official base image
+FROM python:3.12.0-alpine as builder
+
+# set work directory
+WORKDIR /usr/src/app
+
+# set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# install psycopg2 dependencies
+RUN apk update \
+    && apk add postgresql-dev gcc python3-dev musl-dev libffi-dev openssl-dev
+
+RUN apk --update add postgresql zlib jpeg-dev libjpeg freetype-dev \
+    fribidi-dev \
+    harfbuzz-dev \
+    jpeg-dev \
+    lcms2-dev \
+    openjpeg-dev \
+    tcl-dev \
+    tiff-dev \
+    tk-dev \
+    zlib-dev
+# RUN apk update \
+#     && apk add postgresql postgresql-dev gcc python3-dev musl-dev zlib jpeg-dev libjpeg freetype-dev \
+#     fribidi-dev \
+#     harfbuzz-dev \
+#     jpeg-dev \
+#     lcms2-dev \
+#     openjpeg-dev \
+#     tcl-dev \
+#     tiff-dev \
+#     tk-dev \
+#     zlib-dev
+
+# lint
+RUN pip install --upgrade pip
+COPY backend/dj_domen /usr/src/app/
+
+# install python dependencies
+COPY backend/requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /usr/src/app/wheels -r requirements.txt
+
+
+#########
+# FINAL #
+#########
+
+# pull official base image
+FROM python:3.12.0-alpine
+
+# create directory for the app user
+RUN mkdir -p /home/app
+
+# create the app user
+RUN addgroup -S app && adduser -S app -G app
+
+# create the appropriate directories
+ENV HOME=/home/app
+ENV APP_HOME=/home/app/web
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+# install dependencies
+RUN apk update && apk add libpq
+COPY --from=builder /usr/src/app/wheels /wheels
+COPY --from=builder /usr/src/app/requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install --no-cache /wheels/*
+
+# copy project
+COPY backend/dj_domen $APP_HOME
+COPY docker/backend/entrypoint.sh /entrypoint.sh
+# RUN sed -i 's/\r$//g' /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# chown all the files to the app user
+RUN chown -R app:app $APP_HOME
+
+# change to the app user
+USER app
+
+ENTRYPOINT ["/entrypoint.sh"]
+# ENTRYPOINT ["sh", "/entrypoint"]
+
+
